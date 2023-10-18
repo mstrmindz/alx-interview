@@ -1,38 +1,49 @@
 #!/usr/bin/python3
-"""reads stdin line by line and computes metrics"""
 
 import sys
+import re
+import signal
 
-total_size = 0
-counter = 0
-codes = ['200', '301', '400', '401', '403', '404', '405', '500']
-dict_counter = {'200': 0, '301': 0,
-                '400': 0, '401': 0,
-                '403': 0, '404': 0,
-                '405': 0, '500': 0}
+# Define status codes to track
+status_codes = {200, 301, 400, 401, 403, 404, 405, 500}
+
+# Initialize variables
+line_count = 0
+total_file_size = 0
+status_code_counts = {code: 0 for code in status_codes}
+current_line = ""
+
+def print_statistics():
+    global line_count, total_file_size, status_code_counts
+    print(f"Total file size: {total_file_size}")
+    for code in sorted(status_codes):
+        if status_code_counts[code] > 0:
+            print(f"{code}: {status_code_counts[code]}")
+
+def signal_handler(sig, frame):
+    print_statistics()
+    sys.exit(0)
+
+# Register the signal handler for CTRL + C
+signal.signal(signal.SIGINT, signal_handler)
 
 try:
     for line in sys.stdin:
-        line_list = line.split(" ")
-        if len(line_list) > 2:
-            code = line_list[-2]
-            size = line_list[-1]
-            if code in codes:
-                dict_counter[code] += 1
-            total_size += int(size)
-            counter += 1
+        current_line = line.strip()
+        # Extract the file size and status code using regex
+        match = re.search(r'\s(\d+)\s(\d+)$', current_line)
+        if match:
+            status_code = int(match.group(1))
+            file_size = int(match.group(2))
+            if status_code in status_codes:
+                total_file_size += file_size
+                status_code_counts[status_code] += 1
+            line_count += 1
 
-        if counter == 10:
-            print("File size: {:d}".format(total_size))
-            for k, v in sorted(dict_counter.items()):
-                if v != 0:
-                    print("{}: {:d}".format(k, v))
-            counter = 0
+        # Print statistics after every 10 lines
+        if line_count % 10 == 0:
+            print_statistics()
 
-except Exception:
-    pass
-finally:
-    print("File size: {}".format(total_size))
-    for k, v in sorted(dict_counter.items()):
-        if v != 0:
-            print("{}: {}".format(k, v))
+except KeyboardInterrupt:
+    # Handle keyboard interruption (CTRL + C) by printing the statistics
+    print_statistics()
